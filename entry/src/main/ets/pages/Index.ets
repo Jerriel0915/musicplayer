@@ -2,16 +2,15 @@
  * 首页 - 音乐播放器主界面
  */
 
-import { router } from '@kit.ArkUI';
-import { worker, MessageEvents } from '@kit.ArkTS';
-import { promptAction } from '@kit.ArkUI';
+import { promptAction, router } from '@kit.ArkUI';
+import { MessageEvents, worker } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
 import { TrackInfo } from '../models/TrackInfo';
 import { PlayList } from '../models/PlayList';
 import { Database } from '../services/Database';
 import { AudioSvc } from '../services/AudioSvc';
 import { MiniPlayer } from '../views/MiniPlayer';
-import { DEFAULT_PLAYLIST_FAVORITE, DEFAULT_PLAYLIST_RECENT, AUDIO_EXTENSIONS } from '../constants/AppConstants';
+import { AUDIO_EXTENSIONS, DEFAULT_PLAYLIST_FAVORITE } from '../constants/AppConstants';
 
 interface MenuItem {
   icon: Resource;
@@ -323,7 +322,7 @@ struct Index {
         Row() {
           // 菜单按钮
           Button() {
-            Image($r('app.media.startIcon'))
+            Image($r('app.media.icon_menu'))
               .width(24)
               .height(24)
               .fillColor('#333333')
@@ -356,7 +355,7 @@ struct Index {
 
           // 设置按钮
           Button() {
-            Image($r('app.media.startIcon'))
+            Image($r('app.media.icon_setting'))
               .width(24)
               .height(24)
               .fillColor('#333333')

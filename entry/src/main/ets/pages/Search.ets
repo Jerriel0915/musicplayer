@@ -154,7 +154,7 @@ struct SearchPage {
       // 顶部搜索栏
       Row() {
         Button() {
-          Image($r('app.media.startIcon')) // 建议后续替换为具体的返回图标
+          Image($r('app.media.icon_back'))
             .width(24)
             .height(24)
             .fillColor('#333333')
@@ -167,7 +167,7 @@ struct SearchPage {
 
         // 搜索输入框
         Row() {
-          Image($r('app.media.startIcon')) // 建议后续替换为放大镜图标
+          Image($r('app.media.icon_search'))
             .width(18)
             .height(18)
             .fillColor('#999999')
@@ -179,8 +179,8 @@ struct SearchPage {
             .height(40)
             .backgroundColor('transparent')
             .layoutWeight(1)
-            .enterKeyType(EnterKeyType.Search) // UX优化：软键盘显示“搜索”按钮
-            .defaultFocus(true) // UX优化：进入页面自动拉起键盘
+            .enterKeyType(EnterKeyType.Search)
+            .defaultFocus(true)
             .onChange((value: string) => {
               this.onSearchInputChange(value);
             })
@@ -190,7 +190,7 @@ struct SearchPage {
 
           if (this.searchKeyword.length > 0) {
             Button() {
-              Image($r('app.media.startIcon')) // 建议后续替换为清除(X)图标
+              Image($r('app.media.icon_clear'))
                 .width(16)
                 .height(16)
                 .fillColor('#999999')
@@ -271,7 +271,7 @@ struct SearchPage {
         } else {
           // 空状态优化
           Column() {
-            Image($r('app.media.startIcon')) // 建议替换为缺省页插图
+            Image($r('app.media.icon_no_data'))
               .width(100)
               .height(100)
               .opacity(0.3)
@@ -306,7 +306,7 @@ struct SearchPage {
 
                   Blank() // 自动推开两边
 
-                  Image($r('app.media.startIcon')) // 建议替换为垃圾桶图标
+                  Image($r('app.media.icon_delete'))
                     .width(18)
                     .height(18)
                     .fillColor('#999999')

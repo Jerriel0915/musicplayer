@@ -9,8 +9,7 @@ import { avSession } from '@kit.AVSessionKit';
 import { emitter } from '@kit.BasicServicesKit';
 import { fileIo } from '@kit.CoreFileKit';
 import { TrackInfo } from '../models/TrackInfo';
-import { PlayMode, PlayerState, EVENT_NAMES } from '../constants/AppConstants';
-import { TimeUtil } from '../utils/TimeUtil';
+import { PlayerState, PlayMode } from '../constants/AppConstants';
 
 /**
  * 播放进度信息
@@ -28,19 +27,18 @@ export class AudioSvc {
   private static instance: AudioSvc;
   private avPlayer: media.AVPlayer | null = null;
   private avSession: avSession.AVSession | null = null;
-  
   // 播放状态
   private currentState: PlayerState = PlayerState.IDLE;
   private currentTrack: TrackInfo | null = null;
   private playQueue: TrackInfo[] = [];
   private currentIndex: number = -1;
   private playMode: PlayMode = PlayMode.ORDER;
-  
   // 进度更新定时器
   private progressTimer: number = -1;
   private isInitialized: boolean = false;
 
-  private constructor() {}
+  private constructor() {
+  }
 
   /**
    * 获取音频服务实例
@@ -65,11 +63,11 @@ export class AudioSvc {
       // 创建 AVPlayer
       this.avPlayer = await media.createAVPlayer();
       this.setupPlayerListeners();
-      
+
       // 创建 AVSession
       this.avSession = await avSession.createAVSession(context, 'MusicPlayer', 'audio');
       this.setupSessionListeners();
-      
+
       this.isInitialized = true;
       console.info('音频服务初始化成功');
     } catch (err) {
@@ -82,12 +80,14 @@ export class AudioSvc {
    * 设置播放器事件监听
    */
   private setupPlayerListeners(): void {
-    if (!this.avPlayer) return;
+    if (!this.avPlayer) {
+      return;
+    }
 
     // 状态变化监听
     this.avPlayer.on('stateChange', (state: string) => {
       console.info(`播放器状态变化: ${state}`);
-      
+
       switch (state) {
         case 'idle':
           this.currentState = PlayerState.IDLE;
@@ -150,7 +150,9 @@ export class AudioSvc {
    * 设置 AVSession 监听
    */
   private setupSessionListeners(): void {
-    if (!this.avSession) return;
+    if (!this.avSession) {
+      return;
+    }
 
     // 播放控制
     this.avSession.on('play', () => {
@@ -184,7 +186,7 @@ export class AudioSvc {
   private onPrepared(): void {
     // 自动开始播放
     this.avPlayer?.play();
-    
+
     // 更新 AVSession 元数据
     this.updateSessionMetadata();
   }
@@ -203,7 +205,7 @@ export class AudioSvc {
       case PlayMode.RANDOM:
       case PlayMode.ORDER:
       default:
-        // 播放下一首
+      // 播放下一首
         this.next();
         break;
     }
@@ -220,38 +222,38 @@ export class AudioSvc {
 
     try {
       // 停止当前播放
-      if (this.currentState === PlayerState.PLAYING || 
-          this.currentState === PlayerState.PAUSED) {
+      if (this.currentState === PlayerState.PLAYING ||
+        this.currentState === PlayerState.PAUSED) {
         this.avPlayer.stop();
       }
 
       // 重置播放器
       await this.avPlayer.reset();
-      
+
       // 使用文件描述符设置数据源（AVPlayer 需要 fd:// 格式）
       console.info(`打开文件: ${track.filePath}`);
       const file = fileIo.openSync(track.filePath, fileIo.OpenMode.READ_ONLY);
       const fileSize = fileIo.statSync(track.filePath).size;
       console.info(`文件大小: ${fileSize}, fd: ${file.fd}`);
-      
+
       const fdSrc: media.AVFileDescriptor = {
         fd: file.fd,
         offset: 0,
         length: fileSize
       };
       this.avPlayer.fdSrc = fdSrc;
-      
+
       this.currentTrack = track;
-      
+
       // 更新当前索引
       const index = this.playQueue.findIndex((t: TrackInfo): boolean => t.id === track.id);
       if (index >= 0) {
         this.currentIndex = index;
       }
-      
+
       // 触发歌曲变化事件
       this.emitTrackChanged();
-      
+
       console.info(`加载歌曲成功: ${track.title}, 等待准备完成自动播放`);
     } catch (err) {
       console.error('加载歌曲失败:', err);
@@ -263,11 +265,13 @@ export class AudioSvc {
    * 播放
    */
   play(): void {
-    if (!this.avPlayer) return;
+    if (!this.avPlayer) {
+      return;
+    }
 
     try {
-      if (this.currentState === PlayerState.PREPARED || 
-          this.currentState === PlayerState.PAUSED) {
+      if (this.currentState === PlayerState.PREPARED ||
+        this.currentState === PlayerState.PAUSED) {
         this.avPlayer.play();
       } else if (this.currentState === PlayerState.IDLE && this.currentTrack) {
         // 重新加载当前歌曲
@@ -282,7 +286,9 @@ export class AudioSvc {
    * 暂停
    */
   pause(): void {
-    if (!this.avPlayer) return;
+    if (!this.avPlayer) {
+      return;
+    }
 
     try {
       if (this.currentState === PlayerState.PLAYING) {
@@ -297,7 +303,9 @@ export class AudioSvc {
    * 停止
    */
   stop(): void {
-    if (!this.avPlayer) return;
+    if (!this.avPlayer) {
+      return;
+    }
 
     try {
       this.avPlayer.stop();
@@ -312,7 +320,9 @@ export class AudioSvc {
    * @param position 位置（毫秒）
    */
   seekTo(position: number): void {
-    if (!this.avPlayer) return;
+    if (!this.avPlayer) {
+      return;
+    }
 
     try {
       const duration = this.getDuration();
@@ -328,7 +338,9 @@ export class AudioSvc {
    * 下一首
    */
   next(): void {
-    if (this.playQueue.length === 0) return;
+    if (this.playQueue.length === 0) {
+      return;
+    }
 
     let nextIndex: number;
 
@@ -340,7 +352,7 @@ export class AudioSvc {
       case PlayMode.ORDER:
       case PlayMode.SINGLE_LOOP:
       default:
-        // 顺序播放
+      // 顺序播放
         nextIndex = (this.currentIndex + 1) % this.playQueue.length;
         break;
     }
@@ -356,19 +368,21 @@ export class AudioSvc {
    * 上一首
    */
   previous(): void {
-    if (this.playQueue.length === 0) return;
+    if (this.playQueue.length === 0) {
+      return;
+    }
 
     let prevIndex: number;
 
     switch (this.playMode) {
       case PlayMode.RANDOM:
         // 随机播放
-        prevIndex = Math.floor(Math.random() * this.playQueue.length);
-        break;
+      // prevIndex = Math.floor(Math.random() * this.playQueue.length);
+      // break;
       case PlayMode.ORDER:
       case PlayMode.SINGLE_LOOP:
       default:
-        // 顺序播放
+      // 顺序播放
         prevIndex = (this.currentIndex - 1 + this.playQueue.length) % this.playQueue.length;
         break;
     }
@@ -387,7 +401,7 @@ export class AudioSvc {
    */
   setPlayQueue(tracks: TrackInfo[], startIndex: number = 0): void {
     this.playQueue = [...tracks];
-    
+
     if (startIndex >= 0 && startIndex < tracks.length) {
       this.currentIndex = startIndex;
       this.loadTrack(tracks[startIndex]);
@@ -470,7 +484,9 @@ export class AudioSvc {
    * 获取当前播放位置（毫秒）
    */
   getCurrentPosition(): number {
-    if (!this.avPlayer) return 0;
+    if (!this.avPlayer) {
+      return 0;
+    }
     // AVPlayer.currentTime 返回的是毫秒
     return this.avPlayer.currentTime;
   }
@@ -479,7 +495,9 @@ export class AudioSvc {
    * 获取歌曲总时长（毫秒）
    */
   getDuration(): number {
-    if (!this.avPlayer) return 0;
+    if (!this.avPlayer) {
+      return 0;
+    }
     // AVPlayer.duration 返回的是毫秒
     return this.avPlayer.duration;
   }
@@ -491,7 +509,7 @@ export class AudioSvc {
     const currentTime = this.getCurrentPosition();
     const duration = this.getDuration();
     const progress = duration > 0 ? currentTime / duration : 0;
-    
+
     return {
       currentTime,
       duration,
@@ -510,7 +528,9 @@ export class AudioSvc {
    * 更新 AVSession 元数据
    */
   private async updateSessionMetadata(): Promise<void> {
-    if (!this.avSession || !this.currentTrack) return;
+    if (!this.avSession || !this.currentTrack) {
+      return;
+    }
 
     try {
       const metadata: avSession.AVMetadata = {
@@ -523,17 +543,17 @@ export class AudioSvc {
       };
 
       await this.avSession.setAVMetadata(metadata);
-      
+
       // 更新播放状态
       const playbackState: avSession.AVPlaybackState = {
-        state: this.isPlaying() ? avSession.PlaybackState.PLAYBACK_STATE_PLAY : 
-                                  avSession.PlaybackState.PLAYBACK_STATE_PAUSE,
+        state: this.isPlaying() ? avSession.PlaybackState.PLAYBACK_STATE_PLAY :
+          avSession.PlaybackState.PLAYBACK_STATE_PAUSE,
         position: {
           elapsedTime: this.getCurrentPosition(),
           updateTime: Date.now()
         }
       };
-      
+
       await this.avSession.setAVPlaybackState(playbackState);
     } catch (err) {
       console.error('更新 AVSession 元数据失败:', err);
@@ -545,7 +565,7 @@ export class AudioSvc {
    */
   private startProgressUpdate(): void {
     this.stopProgressUpdate();
-    
+
     // 使用定时器定期更新进度
     this.progressTimer = setInterval(() => {
       const position = this.getCurrentPosition();
@@ -573,7 +593,7 @@ export class AudioSvc {
         track: this.currentTrack
       }
     };
-    
+
     emitter.emit({ eventId: 1 }, eventData);
   }
 
@@ -587,7 +607,7 @@ export class AudioSvc {
         state: this.currentState
       }
     };
-    
+
     emitter.emit({ eventId: 2 }, eventData);
   }
 
@@ -603,7 +623,7 @@ export class AudioSvc {
         progress: duration > 0 ? position / duration : 0
       }
     };
-    
+
     emitter.emit({ eventId: 3 }, eventData);
   }
 
@@ -612,17 +632,17 @@ export class AudioSvc {
    */
   async release(): Promise<void> {
     this.stopProgressUpdate();
-    
+
     if (this.avPlayer) {
       this.avPlayer.release();
       this.avPlayer = null;
     }
-    
+
     if (this.avSession) {
       await this.avSession.destroy();
       this.avSession = null;
     }
-    
+
     this.isInitialized = false;
     console.info('音频服务已释放');
   }

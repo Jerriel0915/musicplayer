@@ -22,7 +22,6 @@ export struct ProgressBar {
   @Prop barBgColor: ResourceColor = 'rgba(255,255,255,0.3)';
   // 拖动回调
   onSeek?: (position: number) => void;
-
   // 内部状态
   @State private isDragging: boolean = false;
   @State private dragProgress: number = 0;
@@ -90,9 +89,11 @@ export struct ProgressBar {
             if (this.seekable && this.isDragging) {
               // 计算新的进度
               const componentWidth = event.target.area.width as number;
-              if (componentWidth > 0) {
-                const newProgress = Math.max(0, Math.min(1, 
-                  this.dragProgress + event.offsetX / componentWidth));
+              if (componentWidth > 0 && event.fingerList.length > 0) {
+                // 通过fingerList获取相对于组件左上角的坐标
+                const fingerInfo = event.fingerList[0];
+                const currentX = fingerInfo.localX as number;
+                const newProgress = Math.max(0, Math.min(1, currentX / componentWidth));
                 this.dragProgress = newProgress;
               }
             }

@@ -1,0 +1,652 @@
+/**
+ * 数据库服务类
+ * 使用关系型数据库 (RDB) 管理歌曲和歌单数据
+ */
+
+import { relationalStore } from '@kit.ArkData';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { TrackInfo } from '../models/TrackInfo';
+import { PlayList, PlaylistTrack } from '../models/PlayList';
+import {
+  DATABASE_NAME,
+  DATABASE_VERSION,
+  TRACK_TABLE,
+  PLAYLIST_TABLE,
+  PLAYLIST_TRACK_TABLE,
+  DEFAULT_PLAYLIST_FAVORITE,
+  DEFAULT_PLAYLIST_RECENT
+} from '../constants/AppConstants';
+
+/**
+ * 数据库服务（单例模式）
+ */
+export class Database {
+  private static instance: Database;
+  private rdbStore: relationalStore.RdbStore | null = null;
+  private initialized: boolean = false;
+
+  private constructor() {}
+
+  /**
+   * 获取数据库服务实例
+   */
+  static getInstance(): Database {
+    if (!Database.instance) {
+      Database.instance = new Database();
+    }
+    return Database.instance;
+  }
+
+  /**
+   * 初始化数据库
+   * @param context 应用上下文
+   */
+  async init(context: Context): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    const config: relationalStore.StoreConfig = {
+      name: DATABASE_NAME,
+      securityLevel: relationalStore.SecurityLevel.S1
+    };
+
+    try {
+      this.rdbStore = await relationalStore.getRdbStore(context, config);
+      
+      // 设置 WAL 模式提升并发性能
+      await this.rdbStore.executeSql('PRAGMA journal_mode=WAL;');
+      
+      // 创建表
+      await this.createTables();
+      
+      // 初始化默认歌单
+      await this.initDefaultPlaylists();
+      
+      this.initialized = true;
+      console.info('数据库初始化成功');
+    } catch (err) {
+      console.error('数据库初始化失败:', err);
+      throw new Error('数据库初始化失败: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }
+
+  /**
+   * 创建数据库表
+   */
+  private async createTables(): Promise<void> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    // 创建 track 表
+    const createTrackTableSQL = `
+      CREATE TABLE IF NOT EXISTS ${TRACK_TABLE} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        artist TEXT DEFAULT '未知歌手',
+        album TEXT DEFAULT '未知专辑',
+        duration INTEGER NOT NULL,
+        file_path TEXT UNIQUE NOT NULL,
+        cover_uri TEXT,
+        added_at INTEGER NOT NULL
+      )
+    `;
+
+    // 创建 playlist 表
+    const createPlaylistTableSQL = `
+      CREATE TABLE IF NOT EXISTS ${PLAYLIST_TABLE} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        create_at INTEGER NOT NULL
+      )
+    `;
+
+    // 创建 playlist_track 关联表
+    const createPlaylistTrackTableSQL = `
+      CREATE TABLE IF NOT EXISTS ${PLAYLIST_TRACK_TABLE} (
+        playlist_id INTEGER,
+        track_id INTEGER,
+        sort_order INTEGER NOT NULL,
+        PRIMARY KEY (playlist_id, track_id),
+        FOREIGN KEY (playlist_id) REFERENCES ${PLAYLIST_TABLE}(id) ON DELETE CASCADE,
+        FOREIGN KEY (track_id) REFERENCES ${TRACK_TABLE}(id) ON DELETE CASCADE
+      )
+    `;
+
+    try {
+      await this.rdbStore.executeSql(createTrackTableSQL);
+      await this.rdbStore.executeSql(createPlaylistTableSQL);
+      await this.rdbStore.executeSql(createPlaylistTrackTableSQL);
+      console.info('数据库表创建成功');
+    } catch (err) {
+      console.error('创建数据库表失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 初始化默认歌单
+   */
+  private async initDefaultPlaylists(): Promise<void> {
+    // 检查是否已存在默认歌单
+    const playlists = await this.getAllPlaylists();
+    
+    if (!playlists.find(p => p.name === DEFAULT_PLAYLIST_FAVORITE)) {
+      await this.createPlaylist(DEFAULT_PLAYLIST_FAVORITE);
+    }
+    
+    if (!playlists.find(p => p.name === DEFAULT_PLAYLIST_RECENT)) {
+      await this.createPlaylist(DEFAULT_PLAYLIST_RECENT);
+    }
+  }
+
+  // ==================== Track 操作 ====================
+
+  /**
+   * 插入单首歌曲
+   * @param track 歌曲信息
+   * @returns 插入后的歌曲 ID
+   */
+  async insertTrack(track: TrackInfo): Promise<number> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      const id = await this.rdbStore.insert(TRACK_TABLE, track.toValuesBucket());
+      console.info(`歌曲插入成功: ${track.title}, ID: ${id}`);
+      return id;
+    } catch (err) {
+      // 处理唯一约束冲突
+      if ((err as BusinessError).code === 14800011) {
+        console.warn(`歌曲已存在: ${track.filePath}`);
+        return -1;
+      }
+      console.error('插入歌曲失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 批量插入歌曲（事务）
+   * @param tracks 歌曲列表
+   * @returns 成功插入的数量
+   */
+  async batchInsertTracks(tracks: TrackInfo[]): Promise<number> {
+    if (!this.rdbStore || tracks.length === 0) {
+      return 0;
+    }
+
+    let successCount = 0;
+    
+    // 批量插入，每条记录单独处理
+    for (const track of tracks) {
+      try {
+        await this.rdbStore.insert(TRACK_TABLE, track.toValuesBucket());
+        successCount++;
+      } catch (err) {
+        // 忽略重复项
+        if ((err as BusinessError).code !== 14800011) {
+          console.error('批量插入歌曲失败:', err);
+        }
+      }
+    }
+    
+    console.info(`批量插入完成: ${successCount}/${tracks.length}`);
+    return successCount;
+  }
+
+  /**
+   * 获取所有歌曲
+   * @returns 歌曲列表
+   */
+  async getAllTracks(): Promise<TrackInfo[]> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    const tracks: TrackInfo[] = [];
+    
+    try {
+      const predicates = new relationalStore.RdbPredicates(TRACK_TABLE);
+      predicates.orderByDesc('added_at');
+      
+      const resultSet = await this.rdbStore.query(predicates);
+      
+      while (resultSet.goToNextRow()) {
+        tracks.push(TrackInfo.fromResultSet(resultSet));
+      }
+      
+      resultSet.close();
+      return tracks;
+    } catch (err) {
+      console.error('获取所有歌曲失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 根据 ID 获取歌曲
+   * @param id 歌曲 ID
+   * @returns 歌曲信息
+   */
+  async getTrackById(id: number): Promise<TrackInfo | null> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      const predicates = new relationalStore.RdbPredicates(TRACK_TABLE);
+      predicates.equalTo('id', id);
+      
+      const resultSet = await this.rdbStore.query(predicates);
+      
+      if (resultSet.goToFirstRow()) {
+        const track = TrackInfo.fromResultSet(resultSet);
+        resultSet.close();
+        return track;
+      }
+      
+      resultSet.close();
+      return null;
+    } catch (err) {
+      console.error('获取歌曲失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 根据文件路径获取歌曲
+   * @param filePath 文件路径
+   * @returns 歌曲信息
+   */
+  async getTrackByPath(filePath: string): Promise<TrackInfo | null> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      const predicates = new relationalStore.RdbPredicates(TRACK_TABLE);
+      predicates.equalTo('file_path', filePath);
+      
+      const resultSet = await this.rdbStore.query(predicates);
+      
+      if (resultSet.goToFirstRow()) {
+        const track = TrackInfo.fromResultSet(resultSet);
+        resultSet.close();
+        return track;
+      }
+      
+      resultSet.close();
+      return null;
+    } catch (err) {
+      console.error('获取歌曲失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 删除歌曲
+   * @param id 歌曲 ID
+   */
+  async deleteTrack(id: number): Promise<void> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      const predicates = new relationalStore.RdbPredicates(TRACK_TABLE);
+      predicates.equalTo('id', id);
+      
+      const deleteRows = await this.rdbStore.delete(predicates);
+      console.info(`删除歌曲成功: ${id}, 影响行数: ${deleteRows}`);
+    } catch (err) {
+      console.error('删除歌曲失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 搜索歌曲
+   * @param keyword 搜索关键词
+   * @returns 匹配的歌曲列表
+   */
+  async searchTracks(keyword: string): Promise<TrackInfo[]> {
+    if (!this.rdbStore || !keyword.trim()) {
+      return [];
+    }
+
+    const tracks: TrackInfo[] = [];
+    const searchPattern = `%${keyword.trim()}%`;
+    
+    try {
+      const sql = `
+        SELECT * FROM ${TRACK_TABLE} 
+        WHERE title LIKE ? OR artist LIKE ? OR album LIKE ?
+        ORDER BY added_at DESC
+      `;
+      
+      const resultSet = await this.rdbStore.querySql(sql, [searchPattern, searchPattern, searchPattern]);
+      
+      while (resultSet.goToNextRow()) {
+        tracks.push(TrackInfo.fromResultSet(resultSet));
+      }
+      
+      resultSet.close();
+      return tracks;
+    } catch (err) {
+      console.error('搜索歌曲失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // ==================== Playlist 操作 ====================
+
+  /**
+   * 创建歌单
+   * @param name 歌单名称
+   * @returns 歌单 ID
+   */
+  async createPlaylist(name: string): Promise<number> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    const playlist = new PlayList({
+      name: name,
+      createAt: Date.now()
+    });
+
+    try {
+      const id = await this.rdbStore.insert(PLAYLIST_TABLE, playlist.toValuesBucket());
+      console.info(`歌单创建成功: ${name}, ID: ${id}`);
+      return id;
+    } catch (err) {
+      console.error('创建歌单失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 获取所有歌单
+   * @returns 歌单列表
+   */
+  async getAllPlaylists(): Promise<PlayList[]> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    const playlists: PlayList[] = [];
+    
+    try {
+      const predicates = new relationalStore.RdbPredicates(PLAYLIST_TABLE);
+      predicates.orderByDesc('create_at');
+      
+      const resultSet = await this.rdbStore.query(predicates);
+      
+      while (resultSet.goToNextRow()) {
+        playlists.push(PlayList.fromResultSet(resultSet));
+      }
+      
+      resultSet.close();
+      return playlists;
+    } catch (err) {
+      console.error('获取所有歌单失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 根据 ID 获取歌单
+   * @param id 歌单 ID
+   * @returns 歌单信息
+   */
+  async getPlaylistById(id: number): Promise<PlayList | null> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      const predicates = new relationalStore.RdbPredicates(PLAYLIST_TABLE);
+      predicates.equalTo('id', id);
+      
+      const resultSet = await this.rdbStore.query(predicates);
+      
+      if (resultSet.goToFirstRow()) {
+        const playlist = PlayList.fromResultSet(resultSet);
+        resultSet.close();
+        
+        // 加载歌单中的歌曲
+        playlist.tracks = await this.getPlaylistTracks(id);
+        return playlist;
+      }
+      
+      resultSet.close();
+      return null;
+    } catch (err) {
+      console.error('获取歌单失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 根据名称获取歌单
+   * @param name 歌单名称
+   * @returns 歌单信息
+   */
+  async getPlaylistByName(name: string): Promise<PlayList | null> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      const predicates = new relationalStore.RdbPredicates(PLAYLIST_TABLE);
+      predicates.equalTo('name', name);
+      
+      const resultSet = await this.rdbStore.query(predicates);
+      
+      if (resultSet.goToFirstRow()) {
+        const playlist = PlayList.fromResultSet(resultSet);
+        resultSet.close();
+        
+        // 加载歌单中的歌曲
+        playlist.tracks = await this.getPlaylistTracks(playlist.id);
+        return playlist;
+      }
+      
+      resultSet.close();
+      return null;
+    } catch (err) {
+      console.error('获取歌单失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 删除歌单
+   * @param id 歌单 ID
+   */
+  async deletePlaylist(id: number): Promise<void> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      const predicates = new relationalStore.RdbPredicates(PLAYLIST_TABLE);
+      predicates.equalTo('id', id);
+      
+      const deleteRows = await this.rdbStore.delete(predicates);
+      console.info(`删除歌单成功: ${id}, 影响行数: ${deleteRows}`);
+    } catch (err) {
+      console.error('删除歌单失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // ==================== Playlist-Track 关联操作 ====================
+
+  /**
+   * 添加歌曲到歌单
+   * @param playlistId 歌单 ID
+   * @param trackId 歌曲 ID
+   * @returns 是否成功
+   */
+  async addTrackToPlaylist(playlistId: number, trackId: number): Promise<boolean> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      // 获取当前最大排序值
+      const sql = `SELECT MAX(sort_order) as max_order FROM ${PLAYLIST_TRACK_TABLE} WHERE playlist_id = ?`;
+      const resultSet = await this.rdbStore.querySql(sql, [playlistId.toString()]);
+      
+      let sortOrder = 0;
+      if (resultSet.goToFirstRow()) {
+        sortOrder = (resultSet.getLong(resultSet.getColumnIndex('max_order')) || 0) + 1;
+      }
+      resultSet.close();
+
+      const relation = new PlaylistTrack({
+        playlistId: playlistId,
+        trackId: trackId,
+        sortOrder: sortOrder
+      });
+
+      await this.rdbStore.insert(PLAYLIST_TRACK_TABLE, relation.toValuesBucket());
+      console.info(`添加歌曲到歌单成功: playlist=${playlistId}, track=${trackId}`);
+      return true;
+    } catch (err) {
+      // 处理重复添加
+      if ((err as BusinessError).code === 14800011) {
+        console.warn(`歌曲已在歌单中: playlist=${playlistId}, track=${trackId}`);
+        return false;
+      }
+      console.error('添加歌曲到歌单失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 从歌单移除歌曲
+   * @param playlistId 歌单 ID
+   * @param trackId 歌曲 ID
+   */
+  async removeTrackFromPlaylist(playlistId: number, trackId: number): Promise<void> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      const sql = `DELETE FROM ${PLAYLIST_TRACK_TABLE} WHERE playlist_id = ? AND track_id = ?`;
+      await this.rdbStore.executeSql(sql, [playlistId.toString(), trackId.toString()]);
+      console.info(`从歌单移除歌曲成功: playlist=${playlistId}, track=${trackId}`);
+    } catch (err) {
+      console.error('从歌单移除歌曲失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 获取歌单中的所有歌曲
+   * @param playlistId 歌单 ID
+   * @returns 歌曲列表
+   */
+  async getPlaylistTracks(playlistId: number): Promise<TrackInfo[]> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    const tracks: TrackInfo[] = [];
+    
+    try {
+      const sql = `
+        SELECT t.* FROM ${TRACK_TABLE} t
+        INNER JOIN ${PLAYLIST_TRACK_TABLE} pt ON t.id = pt.track_id
+        WHERE pt.playlist_id = ?
+        ORDER BY pt.sort_order ASC
+      `;
+      
+      const resultSet = await this.rdbStore.querySql(sql, [playlistId.toString()]);
+      
+      while (resultSet.goToNextRow()) {
+        tracks.push(TrackInfo.fromResultSet(resultSet));
+      }
+      
+      resultSet.close();
+      return tracks;
+    } catch (err) {
+      console.error('获取歌单歌曲失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 获取歌曲所在的歌单
+   * @param trackId 歌曲 ID
+   * @returns 歌单 ID 列表
+   */
+  async getTrackPlaylists(trackId: number): Promise<number[]> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    const playlistIds: number[] = [];
+    
+    try {
+      const predicates = new relationalStore.RdbPredicates(PLAYLIST_TRACK_TABLE);
+      predicates.equalTo('track_id', trackId);
+      
+      const resultSet = await this.rdbStore.query(predicates);
+      
+      while (resultSet.goToNextRow()) {
+        playlistIds.push(resultSet.getLong(resultSet.getColumnIndex('playlist_id')));
+      }
+      
+      resultSet.close();
+      return playlistIds;
+    } catch (err) {
+      console.error('获取歌曲所在歌单失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 获取歌曲总数
+   * @returns 歌曲数量
+   */
+  async getTrackCount(): Promise<number> {
+    if (!this.rdbStore) {
+      throw new Error('数据库未初始化');
+    }
+
+    try {
+      const sql = `SELECT COUNT(*) as count FROM ${TRACK_TABLE}`;
+      const resultSet = await this.rdbStore.querySql(sql);
+      
+      let count = 0;
+      if (resultSet.goToFirstRow()) {
+        count = resultSet.getLong(resultSet.getColumnIndex('count'));
+      }
+      
+      resultSet.close();
+      return count;
+    } catch (err) {
+      console.error('获取歌曲数量失败:', err);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * 关闭数据库
+   */
+  async close(): Promise<void> {
+    if (this.rdbStore) {
+      await this.rdbStore.close();
+      this.rdbStore = null;
+      this.initialized = false;
+      console.info('数据库已关闭');
+    }
+  }
+}

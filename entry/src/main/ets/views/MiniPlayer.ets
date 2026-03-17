@@ -5,6 +5,7 @@
 import { TrackInfo } from '../models/TrackInfo';
 import { AudioSvc } from '../services/AudioSvc';
 import { PlayMode } from '../constants/AppConstants';
+import { emitter } from '@kit.BasicServicesKit';
 
 @Component
 export struct MiniPlayer {
@@ -22,12 +23,25 @@ export struct MiniPlayer {
   aboutToAppear() {
     // 初始化状态
     this.updateState();
+    
+    // 监听播放状态变化
+    emitter.on({ eventId: 2 }, () => {
+      console.info('MiniPlayer 收到播放状态变化事件');
+      this.updateState();
+    });
+    
+    // 监听歌曲变化
+    emitter.on({ eventId: 1 }, () => {
+      console.info('MiniPlayer 收到歌曲变化事件');
+      this.updateState();
+    });
   }
 
   private updateState() {
     this.currentTrack = this.audioSvc.getCurrentTrack();
     this.isPlaying = this.audioSvc.isPlaying();
     this.playMode = this.audioSvc.getPlayMode();
+    console.info(`MiniPlayer 状态更新: isPlaying=${this.isPlaying}, track=${this.currentTrack?.title}`);
   }
 
   build() {
@@ -44,7 +58,7 @@ export struct MiniPlayer {
               .objectFit(ImageFit.Cover)
           } else {
             Column() {
-              Image($r('app.media.startIcon'))
+              Image($r('app.media.icon_music_note'))
                 .width(24)
                 .height(24)
                 .fillColor('#CCCCCC')
@@ -108,7 +122,7 @@ export struct MiniPlayer {
       Row({ space: 8 }) {
         // 播放/暂停按钮
         Button() {
-          Image(this.isPlaying ? $r('app.media.startIcon') : $r('app.media.startIcon'))
+          Image(this.isPlaying ? $r('app.media.icon_pause') : $r('app.media.icon_play'))
             .width(28)
             .height(28)
             .fillColor('#333333')
@@ -123,12 +137,12 @@ export struct MiniPlayer {
           } else {
             this.audioSvc.play();
           }
-          this.updateState();
+          // 不立即更新状态，等待事件通知保持同步
         })
 
         // 下一首按钮
         Button() {
-          Image($r('app.media.startIcon'))
+          Image($r('app.media.icon_next'))
             .width(24)
             .height(24)
             .fillColor('#666666')
@@ -139,12 +153,12 @@ export struct MiniPlayer {
         .height(44)
         .onClick(() => {
           this.audioSvc.next();
-          this.updateState();
+          // 不立即更新状态，等待事件通知保持同步
         })
 
         // 播放列表按钮
         Button() {
-          Image($r('app.media.startIcon'))
+          Image($r('app.media.icon_playlist'))
             .width(24)
             .height(24)
             .fillColor('#666666')

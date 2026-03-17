@@ -82,7 +82,7 @@ struct LocalMusicPage {
       Row() {
         // 返回按钮
         Button() {
-          Image($r('app.media.startIcon'))
+          Image($r('app.media.icon_back'))
             .width(24)
             .height(24)
             .fillColor('#333333')
@@ -134,7 +134,7 @@ struct LocalMusicPage {
         .justifyContent(FlexAlign.Center)
       } else if (this.tracks.length === 0) {
         Column() {
-          Image($r('app.media.startIcon'))
+          Image($r('app.media.icon_music_note'))
             .width(80)
             .height(80)
             .fillColor('#CCCCCC')

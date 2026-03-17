@@ -304,7 +304,7 @@ struct Index {
           .margin({ right: 8 })
       }
 
-      Image($r('app.media.startIcon'))
+      Image($r('app.media.icon_arrow_right'))
         .width(16)
         .height(16)
         .fillColor('#CCCCCC')
@@ -335,7 +335,7 @@ struct Index {
 
           // 搜索框
           Row() {
-            Image($r('app.media.startIcon'))
+            Image($r('app.media.icon'))
               .width(20)
               .height(20)
               .fillColor('#999999')
@@ -404,7 +404,7 @@ struct Index {
 
               // 功能菜单
               this.MenuItemBuilder({
-                icon: $r('app.media.startIcon'),
+                icon: $r('app.media.icon_local_music'),
                 title: '本地全盘扫描',
                 subtitle: this.isScanning ? this.scanMessage : '扫描设备中的音频文件',
                 onClick: (): void => { this.startScan(); }
@@ -413,7 +413,7 @@ struct Index {
               Divider().padding({ left: 56 })
 
               this.MenuItemBuilder({
-                icon: $r('app.media.startIcon'),
+                icon: $r('app.media.icon_favorite'),
                 title: '我喜欢的音乐',
                 subtitle: '收藏的歌曲',
                 count: this.favoritePlaylist?.trackCount || 0,
@@ -423,7 +423,7 @@ struct Index {
               Divider().padding({ left: 56 })
 
               this.MenuItemBuilder({
-                icon: $r('app.media.startIcon'),
+                icon: $r('app.media.icon_local_music'),
                 title: '本地歌曲',
                 subtitle: '所有本地音乐',
                 count: this.trackCount,
@@ -433,7 +433,7 @@ struct Index {
               Divider().padding({ left: 56 })
 
               this.MenuItemBuilder({
-                icon: $r('app.media.startIcon'),
+                icon: $r('app.media.icon_recent'),
                 title: '最近播放',
                 subtitle: '最近听过的歌曲',
                 count: this.recentTracks.length,

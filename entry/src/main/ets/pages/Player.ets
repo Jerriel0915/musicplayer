@@ -152,12 +152,12 @@ struct Player {
   private getPlayModeIcon(): Resource {
     switch (this.playMode) {
       case PlayMode.RANDOM:
-        return $r('app.media.startIcon');
+        return $r('app.media.icon_random');
       case PlayMode.SINGLE_LOOP:
-        return $r('app.media.startIcon');
+        return $r('app.media.icon_single_loop');
       case PlayMode.ORDER:
       default:
-        return $r('app.media.startIcon');
+        return $r('app.media.icon_order');
     }
   }
 
@@ -196,7 +196,7 @@ struct Player {
         Row() {
           // 下拉收起按钮
           Button() {
-            Image($r('app.media.startIcon'))
+            Image($r('app.media.icon_back'))
               .width(24)
               .height(24)
               .fillColor('#FFFFFF')
@@ -220,17 +220,7 @@ struct Player {
             .layoutWeight(1)
             .textAlign(TextAlign.Center)
 
-          // 更多按钮
-          Button() {
-            Image($r('app.media.startIcon'))
-              .width(24)
-              .height(24)
-              .fillColor('#FFFFFF')
-          }
-          .type(ButtonType.Circle)
-          .backgroundColor('transparent')
-          .width(44)
-          .height(44)
+
         }
         .width('100%')
         .height(56)
@@ -259,7 +249,7 @@ struct Player {
                   .rotate({ angle: this.rotationAngle })
               } else {
                 Column() {
-                  Image($r('app.media.startIcon'))
+                  Image($r('app.media.icon_music_note'))
                     .width(80)
                     .height(80)
                     .fillColor('rgba(255,255,255,0.5)')
@@ -327,7 +317,7 @@ struct Player {
           Row({ space: 32 }) {
             // 收藏按钮
             Button() {
-              Image(this.isFavorite ? $r('app.media.startIcon') : $r('app.media.startIcon'))
+              Image(this.isFavorite ? $r('app.media.icon_favorited') : $r('app.media.icon_favorite'))
                 .width(28)
                 .height(28)
                 .fillColor(this.isFavorite ? '#FF4081' : '#FFFFFF')
@@ -337,49 +327,13 @@ struct Player {
             .width(48)
             .height(48)
             .onClick(() => this.toggleFavorite())
-
-            // 下载按钮
-            Button() {
-              Image($r('app.media.startIcon'))
-                .width(28)
-                .height(28)
-                .fillColor('#FFFFFF')
-            }
-            .type(ButtonType.Circle)
-            .backgroundColor('transparent')
-            .width(48)
-            .height(48)
-
-            // 评论按钮
-            Button() {
-              Image($r('app.media.startIcon'))
-                .width(28)
-                .height(28)
-                .fillColor('#FFFFFF')
-            }
-            .type(ButtonType.Circle)
-            .backgroundColor('transparent')
-            .width(48)
-            .height(48)
-
-            // 分享按钮
-            Button() {
-              Image($r('app.media.startIcon'))
-                .width(28)
-                .height(28)
-                .fillColor('#FFFFFF')
-            }
-            .type(ButtonType.Circle)
-            .backgroundColor('transparent')
-            .width(48)
-            .height(48)
           }
           .margin({ bottom: 24 })
 
           // 进度条
           ProgressBar({
-            currentTime: $currentTime,
-            duration: $duration,
+            currentTime: this.currentTime,
+            duration: this.duration,
             progressColor: '#FF4081',
             barBgColor: 'rgba(255,255,255,0.3)',
             onSeek: (position: number): void => { this.seekToPosition(position); }
@@ -404,7 +358,7 @@ struct Player {
 
             // 上一首
             Button() {
-              Image($r('app.media.startIcon'))
+              Image($r('app.media.icon_previous'))
                 .width(32)
                 .height(32)
                 .fillColor('#FFFFFF')
@@ -417,7 +371,7 @@ struct Player {
 
             // 播放/暂停
             Button() {
-              Image(this.isPlaying ? $r('app.media.startIcon') : $r('app.media.startIcon'))
+              Image(this.isPlaying ? $r('app.media.icon_pause') : $r('app.media.icon_play'))
                 .width(48)
                 .height(48)
                 .fillColor('#FFFFFF')
@@ -430,7 +384,7 @@ struct Player {
 
             // 下一首
             Button() {
-              Image($r('app.media.startIcon'))
+              Image($r('app.media.icon_next'))
                 .width(32)
                 .height(32)
                 .fillColor('#FFFFFF')
@@ -445,7 +399,7 @@ struct Player {
 
             // 播放列表
             Button() {
-              Image($r('app.media.startIcon'))
+              Image($r('app.media.icon_playlist'))
                 .width(24)
                 .height(24)
                 .fillColor('#FFFFFF')

@@ -7,9 +7,9 @@ import { TimeUtil } from '../utils/TimeUtil';
 @Component
 export struct ProgressBar {
   // 当前时间（毫秒）
-  @Link currentTime: number;
+  @Prop @Watch('onProgressChange') currentTime: number = 0;
   // 总时长（毫秒）
-  @Link duration: number;
+  @Prop @Watch('onProgressChange') duration: number = 0;
   // 是否可拖动
   @Prop seekable: boolean = true;
   // 进度条高度
@@ -26,13 +26,13 @@ export struct ProgressBar {
   // 内部状态
   @State private isDragging: boolean = false;
   @State private dragProgress: number = 0;
+  @State private progressValue: number = 0;
 
-  // 计算进度（0-1）
-  private get progress(): number {
-    if (this.duration <= 0) {
-      return 0;
-    }
-    return this.currentTime / this.duration;
+  // 监听进度变化
+  private onProgressChange() {
+    const newProgress = this.duration > 0 ? this.currentTime / this.duration : 0;
+    this.progressValue = newProgress;
+    console.info(`ProgressBar 进度更新: ${this.currentTime}/${this.duration} = ${newProgress}`);
   }
 
   build() {
@@ -44,7 +44,7 @@ export struct ProgressBar {
         .width(45)
         .textAlign(TextAlign.Start)
 
-      // 进度条
+      // 进度条容器
       Stack({ alignContent: Alignment.Start }) {
         // 背景条
         Row()
@@ -53,24 +53,27 @@ export struct ProgressBar {
           .backgroundColor(this.barBgColor)
           .borderRadius(this.barHeight / 2)
 
-        // 进度条
-        Row()
-          .width(`${(this.isDragging ? this.dragProgress : this.progress) * 100}%`)
-          .height(this.barHeight)
-          .backgroundColor(this.progressColor)
-          .borderRadius(this.barHeight / 2)
+        // 进度条（带滑块）
+        Row() {
+          // 已播放部分
+          Row()
+            .layoutWeight(1)
+            .height(this.barHeight)
+            .backgroundColor(this.progressColor)
+            .borderRadius(this.barHeight / 2)
 
-        // 滑块
-        Row()
-          .width(this.thumbSize)
-          .height(this.thumbSize)
-          .backgroundColor('#FFFFFF')
-          .borderRadius(this.thumbSize / 2)
-          .shadow({ radius: 2, color: 'rgba(0,0,0,0.3)' })
-          .position({
-            x: `calc(${(this.isDragging ? this.dragProgress : this.progress) * 100}% - ${this.thumbSize / 2}px)`
-          })
-          .visibility(this.seekable ? Visibility.Visible : Visibility.Hidden)
+          // 滑块
+          Row()
+            .width(this.thumbSize)
+            .height(this.thumbSize)
+            .backgroundColor('#FFFFFF')
+            .borderRadius(this.thumbSize / 2)
+            .shadow({ radius: 2, color: 'rgba(0,0,0,0.3)' })
+            .margin({ left: -this.thumbSize / 2 })
+            .visibility(this.seekable ? Visibility.Visible : Visibility.Hidden)
+        }
+        .width(`${(this.isDragging ? this.dragProgress : this.progressValue) * 100}%`)
+        .height('100%')
       }
       .width(0)
       .layoutWeight(1)
@@ -80,7 +83,7 @@ export struct ProgressBar {
           .onActionStart(() => {
             if (this.seekable) {
               this.isDragging = true;
-              this.dragProgress = this.progress;
+              this.dragProgress = this.progressValue;
             }
           })
           .onActionUpdate((event: GestureEvent) => {

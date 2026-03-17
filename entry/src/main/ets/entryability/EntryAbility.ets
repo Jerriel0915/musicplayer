@@ -91,7 +91,8 @@ export default class EntryAbility extends UIAbility {
   }
 
   /**
-   * 设置窗口沉浸式
+   * 设置窗口布局
+   * 使用安全区域布局，保留状态栏显示
    */
   private setWindowImmersive(windowStage: window.WindowStage): void {
     windowStage.getMainWindow((err, window) => {
@@ -100,17 +101,8 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       
-      // 设置全屏
-      window.setFullScreen(true)
-        .then(() => {
-          hilog.info(DOMAIN, 'testTag', 'Set fullscreen success');
-        })
-        .catch((err: Error) => {
-          hilog.error(DOMAIN, 'testTag', 'Failed to set fullscreen. Cause: %{public}s', JSON.stringify(err));
-        });
-      
-      // 设置布局为安全区域
-      window.setLayoutFullScreen(true)
+      // 设置布局为安全区域（避开状态栏和导航栏）
+      window.setLayoutFullScreen(false)
         .then(() => {
           hilog.info(DOMAIN, 'testTag', 'Set layout fullscreen success');
         })
